@@ -1,4 +1,5 @@
 child
 parent
 result.txt
+.vscode/
 *.o
