@@ -1,10 +1,11 @@
 #include <unistd.h>
+#include <stdlib.h>
 #include <fcntl.h>
 
-int my_atoi(const char *s) {
-    int res = 0;
+long long my_atoll(const char *s) {
+    long long res = 0;
     int sign = 1;
-    while (*s == ' ' || *s == '\t') s++;
+    while (*s == ' ' || *s == '\t' || *s == '\n') s++;
     if (*s == '-') { sign = -1; s++; }
     while (*s >= '0' && *s <= '9') {
         res = res * 10 + (*s - '0');
@@ -13,53 +14,58 @@ int my_atoi(const char *s) {
     return res * sign;
 }
 
-int is_prime(int n) {
-    if (n <= 1) return 0;
-    for (int i = 2; i * i <= n; i++) {
-        if (n % i == 0) return 0;
+int is_prime(long long num) {
+    if (num < 2) return 0;
+    for (long long i = 2; i * i <= num; i++) {
+        if (num % i == 0) return 0;
     }
     return 1;
 }
 
-int read_line(int fd, char *buf, int max_len) {
-    int i = 0;
-    char c;
-    while (i < max_len - 1) {
-        int r = read(fd, &c, 1);
-        if (r <= 0) break;
-        if (c == '\n') break;
-        buf[i++] = c;
-    }
-    buf[i] = '\0';
-    return i;
-}
-
-int main() {
-    char filename[256];
-    if (read_line(0, filename, sizeof(filename)) == 0) {
-        return 1;
+int main(int argc, char *argv[]) {
+    if (argc < 2) {
+        const char msg[] = "error: file path not provided\n";
+        write(STDERR_FILENO, msg, sizeof(msg) - 1);
+        exit(EXIT_FAILURE);
     }
 
-    int fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    int fd = open(argv[1], O_WRONLY | O_CREAT | O_TRUNC, 0644);
     if (fd < 0) {
-        return 1; 
+        const char msg[] = "error: failed to open target file\n";
+        write(STDERR_FILENO, msg, sizeof(msg) - 1);
+        exit(EXIT_FAILURE);
     }
 
-    char buf[256];
-    while (1) {
-        int len = read_line(0, buf, sizeof(buf));
-        if (len == 0) break;
+    char buffer[1024];
+    ssize_t bytes = 0;
+    ssize_t written = 0;
 
-        int num = my_atoi(buf);
+    while ((bytes = read(STDIN_FILENO, buffer, sizeof(buffer) - 1)) > 0) {
+        buffer[bytes] = '\0';
+        long long num = my_atoll(buffer);
 
         if (num < 0 || is_prime(num)) {
-            write(1, "E", 1); 
+            const char msg[] = "TERMINATE\n";
+            write(STDOUT_FILENO, msg, sizeof(msg) - 1);
             close(fd);
-            return 0;
+            exit(EXIT_SUCCESS);
         }
 
-        write(fd, buf, len);
-        write(fd, "\n", 1);
+        written = write(fd, buffer, bytes);
+        if (written != bytes) {
+            const char msg[] = "error: failed to write to file\n";
+            write(STDERR_FILENO, msg, sizeof(msg) - 1);
+            close(fd);
+            exit(EXIT_FAILURE);
+        }
+
+        written = write(STDOUT_FILENO, buffer, bytes);
+        if (written != bytes) {
+            const char msg[] = "error: failed to write to stdout\n";
+            write(STDERR_FILENO, msg, sizeof(msg) - 1);
+            close(fd);
+            exit(EXIT_FAILURE);
+        }
     }
 
     close(fd);
